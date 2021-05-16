@@ -1,4 +1,5 @@
 require "config"
+require "kaminari"
 
 module ApiServiceC8r
   class Pagination

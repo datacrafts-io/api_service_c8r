@@ -1,8 +1,10 @@
-require_relative "core"
-require_relative "errors"
-require_relative "constants"
-require_relative "serializer"
-require_relative "pagination"
+require "core"
+require "errors"
+require "constants"
+require "serializer"
+require "pagination"
+require "pundit"
+require "generate_action_data"
 
 module ApiServiceC8r
   module Base
@@ -35,9 +37,7 @@ module ApiServiceC8r
       def action(name, kwargs = {})
         action_name = name.to_sym
 
-        unless ALLOWED_ACTIONS.include?(action_name)
-          raise ApiServiceC8r::ForbiddenActionName.new(action_name, self)
-        end
+        raise ApiServiceC8r::ForbiddenActionName.new(action_name, self) unless ALLOWED_ACTIONS.include?(action_name)
 
         generate_method(action_name, kwargs)
       end
@@ -54,43 +54,17 @@ module ApiServiceC8r
       end
 
       def generate_method(action_name, render_result: true, status: :ok, **kwargs)
-        config           = ApiServiceC8r::Core.config[self]
-        target_model     = config[:target_model]
-        serializer       = config.dig(:serializer_config, action_name)
-        authorize_user   = config.dig(:policy_config, :authorize).include?(action_name)
-        use_policy_scope = config.dig(:policy_config, :policy_scope).include?(action_name)
-        use_pagination   = config.fetch(:pagination_config, []).include?(action_name)
-
-        service_namespace = "#{self.name.gsub("Controller", "")}::#{action_name.capitalize}"
-        service           = service_namespace.safe_constantize
-
+        config                = ApiServiceC8r::GenerateActionData.new(self, action_name)
         without_initial_scope = kwargs.fetch(:without_initial_scope, false)
 
         define_method(action_name) do
-          authorize target_model if authorize_user
+          authorize config.target_model if config.authorize_user
+          raise ApiServiceC8r::ServiceNotFound, config.service_namespace if config.service.blank?
 
-          raise ApiServiceC8r::ServiceNotFound.new(service_namespace) if service.blank?
+          service_result    = get_service_result(config, without_initial_scope, kwargs)
+          pagination_result = get_paginated(service_result, config.use_pagination)
 
-          # service must returns data scope
-          service_result = service.new(
-            controller: self,
-            target_model: target_model,
-            initial_scope: initial_scope(use_policy_scope, without_initial_scope, target_model),
-            current_user: current_user,
-            **kwargs
-          ).call
-
-          pagination_result = get_paginated(service_result, use_pagination)
-
-          if render_result
-            serialized_data = get_serialized_data(pagination_result, serializer)
-
-            render json: {
-              data: serialized_data
-            }, status: status
-          else
-            head :ok
-          end
+          render_data(render_result, pagination_result, config.serializer, status)
         end
       end
     end
@@ -98,12 +72,22 @@ module ApiServiceC8r
     module InstanceMethods
       private
 
+      def get_service_result(config, without_initial_scope, kwargs)
+        config.service.new(
+          controller: self,
+          target_model: config.target_model,
+          initial_scope: initial_scope(config.use_policy_scope, without_initial_scope, config.target_model),
+          current_user: current_user,
+          **kwargs
+        ).call
+      end
+
       def get_serialized_data(scope, serializer)
         ApiServiceC8r::Serializer.new(scope: scope, serializer: serializer).call
       end
 
       def get_paginated(scope, use_pagination)
-        if (use_pagination)
+        if use_pagination
           per_page = params.dig(:pagination, :per_page)
           page     = params.dig(:pagination, :page)
 
@@ -115,9 +99,7 @@ module ApiServiceC8r
       end
 
       def validate_pagination_params(per_page, page)
-        if per_page.blank? || page.blank?
-          raise ApiServiceC8r::NoPaginationData.new(params)
-        end
+        raise ApiServiceC8r::NoPaginationData, params if per_page.blank? || page.blank?
       end
 
       def initial_scope(use_policy_scope, without_initial_scope, target_model)
@@ -127,6 +109,18 @@ module ApiServiceC8r
           policy_scope target_model
         else
           target_model.all
+        end
+      end
+
+      def render_data(render_result, pagination_result, serializer, status)
+        if render_result
+          serialized_data = get_serialized_data(pagination_result, serializer)
+
+          render json: {
+            data: serialized_data
+          }, status: status
+        else
+          head :ok
         end
       end
     end
