@@ -23,11 +23,11 @@ Create you `posts_controller.rb`
 class Api::V1::PostsController < ApplicationController
   target_model Post
 
-  use_policy on: %i[show create destroy], policy_scope: %i[show destroy]
-  use_pagination on: %i[show]
-  use_serializer PostsSerializer, on: %i[show]
+  use_policy on: %i[index create destroy], policy_scope: %i[index destroy]
+  use_pagination on: %i[index]
+  use_serializer PostsSerializer, on: %i[index]
 
-  action :show
+  action :index
   action :create, render_result: false, without_initial_scope: true
   action :destroy, render_result: false
 end
@@ -48,12 +48,12 @@ end
 By default using `Pundit` policy
 ```ruby
 class PostPolicy < ApplicationPolicy
-  def show?
+  def index?
     true
   end
 
-  alias create? show?
-  alias destroy? show?
+  alias create? index?
+  alias destroy? index?
 
   class Scope
     attr_reader :user, :scope
@@ -75,9 +75,9 @@ By default using `Kaminari` pagination
 
 ### Next
 After that you need to create services for each action and implement `call` method in them:
-* For `show` action in `services/api/v1/posts/show.rb`
+* For `index` action in `services/api/v1/posts/index.rb`
 ```ruby
-class Api::V1::Posts::Show < ControllerService
+class Api::V1::Posts::Index < ControllerService
   def call
     scope = add_joins(initial_scope)
     scope = add_filter(scope)
@@ -163,3 +163,7 @@ ApiServiceC8r.configure do |config|
 end
 
 ```
+
+## License
+
+The gem is available as open source under the terms of the [MIT License](https://opensource.org/licenses/MIT).

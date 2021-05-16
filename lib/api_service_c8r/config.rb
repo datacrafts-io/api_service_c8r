@@ -1,4 +1,4 @@
-require_relative "constants"
+require "constants"
 
 module ApiServiceC8r
   def self.configure

@@ -20,9 +20,9 @@ module ApiServiceC8r
   class NoPaginationData < BaseError
     def initialize(params)
       @message = <<~TEXT
-          Expected "pagination" => { "per_page" => int, "page" => int } hash in params.
-          No pagination data in: #{params}
-        TEXT
+        Expected "pagination" => { "per_page" => int, "page" => int } hash in params.
+        No pagination data in: #{params}
+      TEXT
       super(@message)
     end
   end
