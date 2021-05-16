@@ -1,4 +1,5 @@
 require "config"
+require "blueprinter"
 
 module ApiServiceC8r
   class Serializer
